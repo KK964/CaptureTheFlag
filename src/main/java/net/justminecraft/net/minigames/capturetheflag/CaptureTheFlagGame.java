@@ -16,6 +16,11 @@ import java.util.Random;
 
 public class CaptureTheFlagGame extends Game {
     private final CaptureTheFlag captureTheFlag;
+    public int redLives;
+    public int blueLives;
+    public List<Player> redTeam = new ArrayList<>();
+    public List<Player> blueTeam = new ArrayList<>();
+    public List<Player> flagCarrier = new ArrayList<>();
     public List<Location> redSpawns = new ArrayList<>();
     public List<Location> blueSpawns = new ArrayList<>();
     public Location redFlag;
