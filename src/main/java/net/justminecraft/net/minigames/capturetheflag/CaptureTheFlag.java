@@ -6,16 +6,14 @@ import net.justminecraft.minigames.minigamecore.Minigame;
 import net.justminecraft.minigames.minigamecore.worldbuffer.WorldBuffer;
 import org.bukkit.*;
 import org.bukkit.block.Banner;
-import org.bukkit.block.Block;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Pig;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
 import org.bukkit.scoreboard.Team;
@@ -72,16 +70,13 @@ public class CaptureTheFlag extends Minigame implements Listener {
         Team red = g.scoreboard.registerNewTeam("red");
         Team blue = g.scoreboard.registerNewTeam("blue");
 
-        Block redBanner = g.world.getBlockAt(g.redFlag);
-        redBanner.setType(Material.STANDING_BANNER);
-        Banner rB = (Banner) redBanner.getState();
-        rB.setBaseColor(DyeColor.RED);
-        rB.update();
-        Block blueBanner = g.world.getBlockAt(g.blueFlag);
-        blueBanner.setType(Material.STANDING_BANNER);
-        Banner bB = (Banner) blueBanner.getState();
-        bB.setBaseColor(DyeColor.BLUE);
-        bB.update();
+        g.redFlag.setWorld(g.world);
+        g.blueFlag.setWorld(g.world);
+        g.redLives = 5;
+        g.blueLives = 5;
+
+        setFlagBlock(g.redFlag, DyeColor.RED);
+        setFlagBlock(g.blueFlag, DyeColor.BLUE);
 
         Objective display = g.scoreboard.registerNewObjective("display", "dummy");
 
@@ -104,11 +99,13 @@ public class CaptureTheFlag extends Minigame implements Listener {
             int games = playerScores.getGames();
             int wins = playerScores.getWins();
             int captures = playerScores.getCaptures();
+            int flagReturns = playerScores.getFlagReturns();
             int losses = games - wins;
-            int score = (games + (wins * 10) + (captures * 2)) - losses;
+            int score = (games + (wins * 10) + (captures * 2) + (flagReturns * 2)) - losses;
             g.games.put(p, games);
             g.wins.put(p, wins);
             g.captures.put(p, captures);
+            g.flagReturns.put(p, flagReturns);
             p.setScoreboard(g.scoreboard);
             playerScore.put(p, score);
         }
@@ -136,6 +133,7 @@ public class CaptureTheFlag extends Minigame implements Listener {
                 g.blueTeam.add(p);
             }
             flip = flip == 1 ? 0 : 1;
+            setArmor(p);
         }
     }
 
@@ -155,6 +153,40 @@ public class CaptureTheFlag extends Minigame implements Listener {
         m.placeSchematic(w,l,key,g);
     }
 
+    public void setFlagBlock(Location location, DyeColor color) {
+        location.getBlock().setType(Material.STANDING_BANNER);
+        Banner b = (Banner) location.getBlock().getState();
+        b.setBaseColor(color);
+        b.update();
+    }
+
+    public void setArmor(Player p) {
+        Game g = MG.core().getGame(p);
+        CaptureTheFlagGame game = (CaptureTheFlagGame) g;
+        String team = game.redTeam.contains(p) ? "Red" : "Blue";
+        ItemStack c = new ItemStack(Material.LEATHER_CHESTPLATE);
+        LeatherArmorMeta cM = (LeatherArmorMeta) c.getItemMeta();
+        ItemStack l = new ItemStack(Material.LEATHER_LEGGINGS);
+        LeatherArmorMeta lM = (LeatherArmorMeta) l.getItemMeta();
+        ItemStack b = new ItemStack(Material.LEATHER_BOOTS);
+        LeatherArmorMeta bM = (LeatherArmorMeta) b.getItemMeta();
+        if(team.equals("Red")) {
+            cM.setColor(Color.RED);
+            lM.setColor(Color.RED);
+            bM.setColor(Color.RED);
+        } else {
+            cM.setColor(Color.BLUE);
+            lM.setColor(Color.BLUE);
+            bM.setColor(Color.BLUE);
+        }
+        c.setItemMeta(cM);
+        l.setItemMeta(lM);
+        b.setItemMeta(bM);
+        p.getInventory().setChestplate(c);
+        p.getInventory().setLeggings(l);
+        p.getInventory().setBoots(b);
+    }
+
     @EventHandler
     public void breakFlag(BlockBreakEvent e) {
         Player p = e.getPlayer();
@@ -162,40 +194,65 @@ public class CaptureTheFlag extends Minigame implements Listener {
         if(g == null || g.minigame != this) return;
         CaptureTheFlagGame game = (CaptureTheFlagGame) g;
         boolean deleteBlock = false;
+        boolean pickUpFlag = false;
+        boolean isOtherPickup = false;
         String flagStolen = null;
         Location redFlag = game.redFlag;
         redFlag.setWorld(g.world);
         Location blueFlag = game.blueFlag;
         blueFlag.setWorld(g.world);
         Location blockBroken = e.getBlock().getLocation();
-        if(game.redTeam.contains(p) && blockBroken.equals(blueFlag)) {
+        if(game.redTeam.contains(p) && (blockBroken.equals(blueFlag) || blockBroken.equals(game.blueDroppedFlag))) {
+            if(blockBroken.equals(game.blueDroppedFlag))
+                isOtherPickup = true;
             ItemStack headBanner = new ItemStack(Material.BANNER, 1, (short) 4);
             p.getInventory().setHelmet(headBanner);
             deleteBlock = true;
             flagStolen = "Blue";
         }
-        if(game.blueTeam.contains(p) && blockBroken.equals(redFlag)) {
+        if(game.blueTeam.contains(p) && (blockBroken.equals(redFlag) || blockBroken.equals(game.redDroppedFlag))) {
+            if(blockBroken.equals(game.redDroppedFlag))
+                isOtherPickup = true;
             ItemStack headBanner = new ItemStack(Material.BANNER, 1, (short) 1);
             p.getInventory().setHelmet(headBanner);
             deleteBlock = true;
             flagStolen = "Red";
         }
 
+        if(game.redTeam.contains(p) && blockBroken.equals(game.redDroppedFlag)) {
+            ItemStack headBanner = new ItemStack(Material.BANNER, 1, (short) 1);
+            p.getInventory().setHelmet(headBanner);
+            deleteBlock = true;
+            pickUpFlag = true;
+        }
+        if(game.blueTeam.contains(p) && blockBroken.equals(game.blueDroppedFlag)) {
+            ItemStack headBanner = new ItemStack(Material.BANNER, 1, (short) 4);
+            p.getInventory().setHelmet(headBanner);
+            deleteBlock = true;
+            pickUpFlag = true;
+        }
+
         if(deleteBlock) {
             e.getBlock().setType(Material.AIR);
             game.flagCarrier.add(p);
-            p.sendMessage(ChatColor.GREEN + "You stole " + flagStolen + "'s Flag! Make it back to your spawn to capture the flag!");
             p.playSound(p.getLocation(), Sound.LEVEL_UP, 1, 1);
-            for(Player player : g.players) {
-                if(player != p) {
-                    if((game.redTeam.contains(player) && flagStolen.equals("Red")) || (game.blueTeam.contains(player) && flagStolen.equals("Blue"))) {
-                        player.sendMessage(ChatColor.RED + "Your flag was stolen by " + p.getName() + "! Go get your flag back!");
-                        player.playSound(player.getLocation(), Sound.BURP, 1, 1);
-                    } else {
-                        player.sendMessage(ChatColor.GREEN + p.getName() + " stole " + flagStolen + "'s flag, protect them!");
-                        player.playSound(player.getLocation(), Sound.LEVEL_UP, 1, 1);
+            if(!pickUpFlag) {
+                if(!isOtherPickup) {
+                    p.sendMessage(ChatColor.GREEN + "You stole " + flagStolen + "'s Flag! Make it back to your spawn to capture the flag!");
+                    for(Player player : g.players) {
+                        if(player != p) {
+                            if((game.redTeam.contains(player) && flagStolen.equals("Red")) || (game.blueTeam.contains(player) && flagStolen.equals("Blue"))) {
+                                player.sendMessage(ChatColor.RED + "Your flag was stolen by " + p.getName() + "! Go get your flag back!");
+                                player.playSound(player.getLocation(), Sound.BURP, 1, 1);
+                            } else {
+                                player.sendMessage(ChatColor.GREEN + p.getName() + " stole " + flagStolen + "'s flag, protect them!");
+                                player.playSound(player.getLocation(), Sound.LEVEL_UP, 1, 1);
+                            }
+                        }
                     }
                 }
+            } else {
+                p.sendMessage(ChatColor.GREEN + "You picked up your flag! Bring it back to your spawn!");
             }
         }
     }
@@ -206,46 +263,117 @@ public class CaptureTheFlag extends Minigame implements Listener {
         Game g = MG.core().getGame(p);
         if(g == null || g.minigame != this) return;
         CaptureTheFlagGame game = (CaptureTheFlagGame) g;
-        if(!game.flagCarrier.contains(p)) return;
+        if(!game.flagCarrier.contains(p) && !game.flagReturnCarrier.contains(p)) return;
         Location to = e.getTo();
         Location l = to.getBlock().getLocation();
-        l.setWorld(null);
         l.setY(l.getY() - 1);
         boolean capturedFlag = false;
+        boolean returnedFlag = false;
+        String capturedFlagString = null;
         if(game.blueTeam.contains(p)) {
             if(game.blueSpawns.contains(l)) {
-                game.redLives = game.redLives - 1;
-                game.captures.replace(p, game.captures.get(p) + 1);
-                capturedFlag = true;
+                if(game.flagCarrier.contains(p)) {
+                    game.redLives = game.redLives - 1;
+                    game.captures.replace(p, game.captures.get(p) + 1);
+                    capturedFlag = true;
+                    capturedFlagString = "Red";
+                }
+                if(game.flagReturnCarrier.contains(p)) {
+                    returnedFlag = true;
+                }
             }
         }
         if(game.redTeam.contains(p)) {
             if(game.redSpawns.contains(l)) {
-                game.blueLives = game.blueLives - 1;
-                game.captures.replace(p, game.captures.get(p) + 1);
-                capturedFlag = true;
-            }
-        }
-        if(capturedFlag) {
-            p.getInventory().setHelmet(new ItemStack(Material.AIR));
-            game.flagCarrier.remove(p);
-            for(Player player : game.redTeam) {
-                if(game.redTeam.contains(p)) {
-                    player.sendMessage(ChatColor.GREEN + p.getName() + " Captured Blue teams flag!");
+                if(game.flagCarrier.contains(p)) {
+                    game.blueLives = game.blueLives - 1;
+                    game.captures.replace(p, game.captures.get(p) + 1);
+                    capturedFlag = true;
+                    capturedFlagString = "Blue";
                 } else {
-                    player.sendMessage(ChatColor.RED + p.getName() + " Captured Your teams flag!");
+                    returnedFlag = true;
                 }
             }
-            for(Player player : game.blueTeam) {
-                if(game.blueTeam.contains(p)) {
-                    player.sendMessage(ChatColor.GREEN + p.getName() + " Captured Red teams flag!");
+        }
+        if(capturedFlag || returnedFlag) {
+            p.getInventory().setHelmet(new ItemStack(Material.AIR));
+            game.updateScoreBoard();
+            if(capturedFlag) {
+                game.flagCarrier.remove(p);
+                if(capturedFlagString.equals("Red")) {
+                    setFlagBlock(game.redFlag, DyeColor.RED);
                 } else {
-                    player.sendMessage(ChatColor.RED + p.getName() + " Captured Your teams flag!");
+                    setFlagBlock(game.blueFlag, DyeColor.BLUE);
+                }
+
+                for(Player player : game.redTeam) {
+                    if(capturedFlagString.equals("Blue")) {
+                        player.sendMessage(ChatColor.GREEN + p.getName() + " Captured Blue teams flag!");
+                    } else {
+                        player.sendMessage(ChatColor.RED + p.getName() + " Captured Your teams flag!");
+                    }
+                }
+                for(Player player : game.blueTeam) {
+                    if(capturedFlagString.equals("Red")) {
+                        player.sendMessage(ChatColor.GREEN + p.getName() + " Captured Red teams flag!");
+                    } else {
+                        player.sendMessage(ChatColor.RED + p.getName() + " Captured Your teams flag!");
+                    }
+                }
+            }
+            if(returnedFlag) {
+                game.flagReturnCarrier.remove(p);
+                if(game.redTeam.contains(p)) {
+                    setFlagBlock(game.redFlag, DyeColor.RED);
+                    for(Player player : game.redTeam) {
+                        player.sendMessage(ChatColor.GREEN + p.getName() + " returned your flag!");
+                    }
+                } else {
+                    setFlagBlock(game.blueFlag, DyeColor.BLUE);
+                    for(Player player : game.blueTeam) {
+                        player.sendMessage(ChatColor.GREEN + p.getName() + " returned your flag!");
+                    }
                 }
             }
         }
     }
 
+    @EventHandler
+    public void playerHurt(EntityDamageByEntityEvent e) {
+        if(e.getDamager() instanceof Player && e.getEntity() instanceof Player) {
+            Player damager = (Player) e.getDamager();
+            Player hurt = (Player) e.getEntity();
+            Game g = MG.core().getGame(hurt);
+            if(g == null || g.minigame != this) return;
+            CaptureTheFlagGame game = (CaptureTheFlagGame) g;
+            if(game.respawnInvulnerability.containsKey(hurt)) {
+                damager.sendMessage(ChatColor.RED + "That player has respawn Invulnerability!");
+                e.setCancelled(true);
+                return;
+            }
+            if(game.flagCarrier.contains(hurt)) {
+                game.flagCarrier.remove(hurt);
+                hurt.sendMessage(ChatColor.RED + "You lost the flag!");
+                hurt.getInventory().setHelmet(new ItemStack(Material.AIR));
+                if(game.redTeam.contains(hurt)) {
+                    setFlagBlock(hurt.getLocation(), DyeColor.BLUE);
+                } else {
+                    setFlagBlock(hurt.getLocation(), DyeColor.RED);
+                }
+            }
+            if(game.flagReturnCarrier.contains(hurt)) {
+                game.flagReturnCarrier.remove(hurt);
+                hurt.sendMessage(ChatColor.RED + "You lost the flag!");
+                hurt.getInventory().setHelmet(new ItemStack(Material.AIR));
+                if(game.redTeam.contains(hurt)) {
+                    setFlagBlock(hurt.getLocation(), DyeColor.RED);
+                } else {
+                    setFlagBlock(hurt.getLocation(), DyeColor.BLUE);
+                }
+            }
+            e.setDamage(5);
+        }
+    }
 
     public static CaptureTheFlag getPlugin() {
         return captureTheFlag;

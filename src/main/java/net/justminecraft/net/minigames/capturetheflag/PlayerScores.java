@@ -46,6 +46,13 @@ public class PlayerScores {
         return Integer.parseInt(parts[3]);
     }
 
+    public int getFlagReturns() {
+        String part = getLine();
+        if(part == null) return 0;
+        String[] parts = part.split(",");
+        return Integer.parseInt(parts[4]);
+    }
+
     private String getLine() {
         List<String> lines = getLines();
         if(lines.isEmpty()) return null;
@@ -70,17 +77,19 @@ public class PlayerScores {
         return null;
     }
 
-    public void save(int games, int wins, int captures) {
+    public void save(int games, int wins, int captures, int returns) {
         List<String> lines = getLines();
         List<String> line = new ArrayList<>();
         boolean isInFile = false;
-        String newValue = uuid.toString() + "," + games + "," + wins + "," + captures;
+        String newValue = uuid.toString() + "," + games + "," + wins + "," + captures + "," + returns;
         if(lines.isEmpty()) {
+            isInFile = true;
             line.add(newValue);
         } else {
             for(String l : lines) {
                 String[] part = l.split(",");
                 if(part[0].equals(uuid.toString())) {
+                    isInFile = true;
                     line.add(newValue);
                 } else {
                     line.add(l);
