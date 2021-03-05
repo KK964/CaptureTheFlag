@@ -10,7 +10,6 @@ import org.bukkit.util.Vector;
 
 import java.io.File;
 import java.io.IOException;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +28,7 @@ public class CaptureTheFlagGame extends Game {
     public Location redFlag;
     public Location blueFlag;
     public Location redDroppedFlag;
-    public LocalDate blueDroppedFlag;
+    public Location blueDroppedFlag;
     public HashMap<Player, Integer> wins = new HashMap<>();
     public HashMap<Player, Integer> games = new HashMap<>();
     public HashMap<Player, Integer> captures = new HashMap<>();

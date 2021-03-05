@@ -1,5 +1,6 @@
 package net.justminecraft.net.minigames.capturetheflag;
 
+import net.justminecraft.minigames.minigamecore.ActionBar;
 import net.justminecraft.minigames.minigamecore.Game;
 import net.justminecraft.minigames.minigamecore.MG;
 import net.justminecraft.minigames.minigamecore.Minigame;
@@ -234,9 +235,9 @@ public class CaptureTheFlag extends Minigame implements Listener {
 
         if(deleteBlock) {
             e.getBlock().setType(Material.AIR);
-            game.flagCarrier.add(p);
             p.playSound(p.getLocation(), Sound.LEVEL_UP, 1, 1);
             if(!pickUpFlag) {
+                game.flagCarrier.add(p);
                 if(!isOtherPickup) {
                     p.sendMessage(ChatColor.GREEN + "You stole " + flagStolen + "'s Flag! Make it back to your spawn to capture the flag!");
                     for(Player player : g.players) {
@@ -250,8 +251,11 @@ public class CaptureTheFlag extends Minigame implements Listener {
                             }
                         }
                     }
+                } else {
+                    p.sendMessage(ChatColor.GREEN + "You picked up " + flagStolen + "'s Flag!");
                 }
             } else {
+                game.flagReturnCarrier.add(p);
                 p.sendMessage(ChatColor.GREEN + "You picked up your flag! Bring it back to your spawn!");
             }
         }
@@ -323,6 +327,7 @@ public class CaptureTheFlag extends Minigame implements Listener {
             }
             if(returnedFlag) {
                 game.flagReturnCarrier.remove(p);
+                game.flagReturns.replace(p, game.flagReturns.get(p) + 1);
                 if(game.redTeam.contains(p)) {
                     setFlagBlock(game.redFlag, DyeColor.RED);
                     for(Player player : game.redTeam) {
@@ -347,7 +352,8 @@ public class CaptureTheFlag extends Minigame implements Listener {
             if(g == null || g.minigame != this) return;
             CaptureTheFlagGame game = (CaptureTheFlagGame) g;
             if(game.respawnInvulnerability.containsKey(hurt)) {
-                damager.sendMessage(ChatColor.RED + "That player has respawn Invulnerability!");
+                ActionBar actionBar = new ActionBar(ChatColor.RED + "That player is Invulnerable!");
+                actionBar.send(damager);
                 e.setCancelled(true);
                 return;
             }
@@ -357,8 +363,10 @@ public class CaptureTheFlag extends Minigame implements Listener {
                 hurt.getInventory().setHelmet(new ItemStack(Material.AIR));
                 if(game.redTeam.contains(hurt)) {
                     setFlagBlock(hurt.getLocation(), DyeColor.BLUE);
+                    game.blueDroppedFlag = hurt.getLocation().getBlock().getLocation();
                 } else {
                     setFlagBlock(hurt.getLocation(), DyeColor.RED);
+                    game.redDroppedFlag = hurt.getLocation().getBlock().getLocation();
                 }
             }
             if(game.flagReturnCarrier.contains(hurt)) {
@@ -367,8 +375,10 @@ public class CaptureTheFlag extends Minigame implements Listener {
                 hurt.getInventory().setHelmet(new ItemStack(Material.AIR));
                 if(game.redTeam.contains(hurt)) {
                     setFlagBlock(hurt.getLocation(), DyeColor.RED);
+                    game.redDroppedFlag = hurt.getLocation().getBlock().getLocation();
                 } else {
                     setFlagBlock(hurt.getLocation(), DyeColor.BLUE);
+                    game.blueDroppedFlag = hurt.getLocation().getBlock().getLocation();
                 }
             }
             e.setDamage(5);
